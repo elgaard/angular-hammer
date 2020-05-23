@@ -6,16 +6,16 @@
 // (fairly heavy) modifications by James Wilson <me@unbui.lt>
 //
 
-(function (window, angular, Hammer) {
+(function (angular, Hammer) {
   'use strict';
 
   // Checking to make sure Hammer and Angular are defined
 
   if (typeof angular === 'undefined') {
-    throw Error("angular-hammer: AngularJS (window.angular) is undefined but is necessary.");
+    throw Error("angular-hammer: AngularJS (angular) is undefined but is necessary.");
   }
   if (typeof Hammer === 'undefined') {
-    throw Error("angular-hammer: HammerJS (window.Hammer) is undefined but is necessary.");
+    throw Error("angular-hammer: HammerJS (Hammer) is undefined but is necessary.");
   }
 
   /**
@@ -246,8 +246,6 @@
           });
           if(!foundOpt) foundOpt = defaultOptionsForEvent(eventName);
           else foundOpt = normalizeRecognizerOptions(foundOpt);
-
-
           return [angular.extend(defaults, foundOpt)];
         }
       };
@@ -299,19 +297,29 @@
             var handler = function (event) {
                   event.element = element;
 
-                  var recognizer = hammer.get(event.type);
+                  // Default invokeApply to true, overridden by recognizer option
+                  var invokeApply = true;
+
+                  var recognizer = hammer.get(getRecognizerTypeFromeventName(event.type));
                   if (recognizer) {
-                    if (recognizer.options.preventDefault) {
+                    var opts = recognizer.options;
+                    if (opts.preventDefault) {
                       event.preventDefault();
                     }
-                    if (recognizer.options.stopPropagation) {
+                    if (opts.stopPropagation) {
                       event.srcEvent.stopPropagation();
                     }
+
+                    invokeApply = angular.isUndefined(opts.invokeApply) || opts.invokeApply;
                   }
 
-                  scope.$apply(function(){
+                  if (invokeApply) {
+                    scope.$apply(function(){
+                      handlerExpr({ '$event': event });
+                    });
+                  } else {
                     handlerExpr({ '$event': event });
-                  });
+                  }
                 };
 
             // The recognizer options are normalized to an array. This array
@@ -319,9 +327,7 @@
             // takes care of that), but we do a couple of specific things
             // depending on this directive so that events play nice together.
             angular.forEach(recognizerOpts, function (options) {
-
               if(eventName !== 'custom'){
-
                 if (eventName === 'doubletap' && hammer.get('tap')) {
                   options.recognizeWith = 'tap';
                 }
@@ -343,7 +349,7 @@
 
               //if custom there may be multiple events to apply, which
               //we do here. else, we'll only ever add one.
-              hammer.on(eventName, handler);
+              hammer.on(eventName=="custom"?options.event:eventName, handler);
 
             });
 
@@ -395,7 +401,7 @@
    */
   function applyManagerOptions (managerOpts, recognizerOpts) {
     if (managerOpts) {
-      recognizerOpts.preventGhosts = managerOpts.preventGhosts;
+      recognizerOpts.preventGhosts = managerOpts.preventGhosts || recognizerOpts.preventGhosts;
     }
 
     return recognizerOpts;
@@ -441,6 +447,14 @@
         ' recognizer. Values of the passed manager and options: ', manager, options);
     }
 
+    if (options.preventGhosts === true && element != null) {
+      preventGhosts(element);
+    }
+    if (!options._name) {
+      recognizer = addRecognizer(manager, options.type);
+      recognizer.set(options);
+      return;
+    }
     var recognizer = manager.get(options._name);
     if (!recognizer) {
       recognizer = addRecognizer(manager, options._name);
@@ -497,10 +511,6 @@
     if (typeof options.dropRequireFailure === 'string' &&
         manager.get(options.dropRequireFailure) != null) {
       recognizer.dropRequireFailure(manager.get(options.dropRequireFailure));
-    }
-
-    if (options.preventGhosts === true && element != null) {
-      preventGhosts(element);
     }
   }
 
@@ -598,4 +608,4 @@
       }
     }
   }
-})(window, window.angular, window.Hammer);
+})(angular, Hammer);
